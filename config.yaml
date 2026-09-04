@@ -1,0 +1,74 @@
+# config.yaml — all parameters, single source of truth
+
+project_dir: data/0
+
+# --- COLMAP SfM ---
+colmap:
+  extractor: superpoint # sift | aliked_n16rot | aliked_n32 | superpoint
+  matcher: lightglue # bruteforce | lightglue
+  max_num_features: 2560 # per-image feature cap (LightGlue attention is O(N^2); lower if VRAM-bound)
+  resize_max: 2560 # max long edge of the SuperPoint input (aspect preserved); hloc presets usually use 1600, larger keeps more detail
+  resize_force: false # true upscales images already smaller than resize_max; hloc's superpoint_max preset sets true, but false avoids interpolation artifacts in SfM
+  nms_radius: 3 # min pixel spacing between SuperPoint keypoints; 3 outdoors, 4 helps indoors where texture repeats
+  pair_strategy: retrieval # exhaustive | vocab_tree (sift only) | retrieval (superpoint only)
+  vocab_tree_path: colmap/vocab_trees/vocab_tree_faiss_flickr100K_words32K.bin # 32K / 256K / 1M: 32K for 100-1k images, 256K for 1k-10k, 1M beyond
+  num_images: 100 # vocab_tree: candidate neighbors per image (~O(N*k))
+  num_nearest_neighbors: 5 # vocab_tree: candidate depth per visual word
+  retrieval_model: megaloc # retrieval: netvlad | megaloc (hloc global-descriptor models)
+  num_matched: 30 # retrieval: top-k neighbors per image; 10-20 up to ~500 images, 20-30 for 500-1k, 30-50 for 1k-10k (hloc's own SfM example uses 5; the AIR-HLoc sweep saturates around k>=10)
+  lightglue_depth_confidence: 0.95 # LightGlue early-exit threshold across transformer layers; -1 disables it, running all 9 layers for better matches at more cost (upstream default 0.95)
+  lightglue_width_confidence: 0.99 # LightGlue token-pruning threshold; -1 disables it, keeping low-confidence keypoints for better matches at more cost (upstream default 0.99)
+  mapper: global # incremental | global; switch to global from a few thousand images up, which runs view-graph calibration first
+  glomap_refine: true # with mapper=global, follow up with incremental to fix poses (BA filter drops flipped cameras, PnP re-inserts them); costs 1.5-3x the GLOMAP time. Ignored when mapper=incremental
+  camera_mode: single # auto | single | per_folder | per_image; single forces shared intrinsics for one camera at a fixed focal length, per_folder when the data is split into one directory per camera
+  camera_model: simple_radial # pycolmap CameraModelId. Pinhole family (simple_pinhole/pinhole/simple_radial/radial/opencv/...) suits already-undistorted images; use the fisheye family (opencv_fisheye/radial_fisheye/...) for native fisheye
+
+# --- OpenMVS Dense Reconstruction ---
+openmvs:
+  bin_dir: "" # directory containing InterfaceCOLMAP/DensifyPointCloud/ReconstructMesh; empty -> look up on PATH
+  resolution_level: 1 # 0=original, 1=1/2, 2=1/4
+  min_resolution: 640 # min image processing resolution
+  max_resolution: 2560 # max image processing resolution
+  number_views: 8 # source views per pixel
+  number_views_fuse: 3 # min consistent views for fusion
+  estimate_colors: 2 # color estimation (0=off, 1=final, 2=estimate)
+  estimate_normals: 2 # normal estimation (0=off, 1=final, 2=estimate)
+  mesh_decimate: 1.0 # ReconstructMesh decimation ratio
+  mesh_remove_spurious: 20 # ReconstructMesh spurious face threshold
+  mesh_smooth: 2 # ReconstructMesh smoothing iterations
+  cli_timeout: 3600 # per-tool subprocess timeout (seconds)
+  omp_num_threads: 1 # OMP threads for OpenMVS CLI; reduce when VRAM is tight (empirically 16-way default crashes on 49-image scene with 16GB VRAM)
+  # Downsample (voxel-grid binary search on GPU)
+  downsample_target: 10000000 # target point count
+  downsample_max_iter: 30 # binary-search iterations for voxel size
+  downsample_tolerance: 0.01 # accept voxel size when |count-target|/target < tol
+  downsample_batch_size: 20000000 # GPU batch (in points) for hash + aggregate
+
+# --- QS-SAM3D 3D Segmentation ---
+qs_sam3d:
+  sam_model_path: qs_sam3d/sam_vit_h_4b8939.pth
+  voxel_size: 0.005 # voxelization grid size
+  min_group_size: 100 # min group point count
+  smooth_k: 32 # final scene-self KNN majority-vote neighborhood
+  smooth_iters: 1 # KNN majority-vote iterations (label-diffusion erosion)
+  image_size: [1200, 900] # processing image size [width, height]
+  quality_window_size: 5 # frame quality scoring window
+  frame_rejection_percent: 10 # frame quality filter percentile
+  depth_shift: 1000.0 # depth scaling (mm -> m)
+  match_distance_factor: 5 # matching distance factor
+  overlap_ratio: 0.25 # 3D merge IoU threshold
+  distance_threshold: 0.5 # distance filter threshold
+  fusion_consistency_threshold: 0.01 # per-view depth filter vs. scene_dense.ply
+  # SAM parameters
+  points_per_side: 32 # SAM grid sample points per side
+  pred_iou_thresh: 0.86 # SAM predicted IoU threshold
+  stability_score_thresh: 0.92 # SAM stability score threshold
+  crop_n_layers: 1 # SAM crop layers
+  crop_n_points_downscale_factor: 2 # SAM crop downscale factor
+  min_mask_region_area: 100 # SAM min mask region area
+
+# --- Visualization (shared by QS-SAM3D) ---
+visualization:
+  alpha: 0.7 # original RGB weight when blending
+  beta: 0.3 # segment color weight when blending
+  color_seed: 42 # deterministic segment palette

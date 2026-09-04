@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE / editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Local config overrides (config.yaml is the reference; copy to config.local.yaml to tune per-machine)
+config.local.yaml
+
+# Project data & artifacts
+data/
+outputs/
+output/
+runs/
+logs/
+*.log
+
+# SfM / MVS intermediate & result files
+*.db
+*.db-journal
+*.bin
+*.ply
+*.obj
+*.mvs
+*.dmap
+*.mvi
+
+# Model weights
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+
+# Images / videos (usually large datasets)
+*.npy
+*.npz
+

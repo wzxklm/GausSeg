@@ -1,0 +1,27 @@
+{
+  "name": "GausSeg",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "gausseg",
+  "workspaceFolder": "/workspace",
+  "remoteUser": "sandboxuser",
+  "shutdownAction": "none",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "eamodio.gitlens"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/bin/python3",
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "terminal.integrated.profiles.linux": {
+          "bash": {
+            "path": "bash",
+            "icon": "terminal-bash"
+          }
+        }
+      }
+    }
+  }
+}

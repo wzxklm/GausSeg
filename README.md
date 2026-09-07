@@ -4,6 +4,13 @@ Class-agnostic 3D instance segmentation from a folder of RGB images. The
 pipeline runs Structure-from-Motion, dense reconstruction, and SAM-based mask
 lifting, and writes a labelled point cloud and mesh.
 
+> **Looking for Gaus-MVSNet?** This branch recovers depth with OpenMVS
+> PatchMatch. The pipeline of the paper — depth from the Gaus-MVSNet network,
+> with OpenMVS reduced to meshing — lives on the
+> [`gaus-mvsnet`](../../tree/gaus-mvsnet) branch, along with its DTU
+> checkpoint. The two branches are kept separate; neither is merged into the
+> other.
+
 ## Pipeline
 
 | # | Stage | Module | Writes |

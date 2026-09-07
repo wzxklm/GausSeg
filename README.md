@@ -183,8 +183,30 @@ as background (label `-1`).
 
 ## Configuration
 
-Everything lives in [`config.yaml`](config.yaml), commented inline. The settings
-that need changing per scene:
+Everything lives in [`config.yaml`](config.yaml), commented inline. These
+defaults are tuned for general capture rather than for benchmarks, so a few of
+them differ from the values the paper reports; set these back to reproduce the
+paper's numbers:
+
+| Setting | Default here | Paper |
+| --- | --- | --- |
+| `qs_sam3d.frame_rejection_percent` | 10 | *ρ* = 15% |
+| `qs_sam3d.min_group_size` | 100 | *τ_g* = 50 |
+| `qs_sam3d.distance_threshold` | 0.5 | *τ_d* = 1.5·*v_s* = 0.0075 |
+| `qs_sam3d.pred_iou_thresh` | 0.86 | 0.88 (SAM default) |
+| `qs_sam3d.stability_score_thresh` | 0.92 | 0.95 (SAM default) |
+| `qs_sam3d.crop_n_layers` | 1 | 0 (SAM default) |
+| `qs_sam3d.crop_n_points_downscale_factor` | 2 | 1 (SAM default) |
+| `qs_sam3d.min_mask_region_area` | 100 | 0 (SAM default) |
+| `gaus_mvsnet.reproj_threshold` | 0.25 | *τ_p* = 1 px |
+| `gaus_mvsnet.max_h` | 1200 | 1152, evaluating DTU at 1600×1152 |
+
+Everything else already matches the paper. Note that `voxel_size` and
+`distance_threshold` are scene-scale dependent: COLMAP reconstructions carry
+no metric scale, so rescale both to the scene instead of copying them between
+datasets.
+
+The settings that need changing per scene:
 
 **Stage 1 — scale to your image count**
 

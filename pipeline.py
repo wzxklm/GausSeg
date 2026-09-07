@@ -1,4 +1,4 @@
-"""Pipeline orchestrator: 5-step sequential execution."""
+"""Pipeline orchestrator: sequential stage execution."""
 
 from __future__ import annotations
 
@@ -25,8 +25,14 @@ STEPS = {
         "class": "ColmapSfM",
         "config_attr": "colmap",
     },
+    "gaus_mvsnet": {
+        "name": "Gaus-MVSNet Depth",
+        "module": "gaus_mvsnet.depth",
+        "class": "GausMvsNetDepth",
+        "config_attr": "gaus_mvsnet",
+    },
     "openmvs": {
-        "name": "OpenMVS Dense",
+        "name": "OpenMVS Mesh",
         "module": "openmvs.dense",
         "class": "OpenMVSDense",
         "config_attr": "openmvs",
@@ -46,9 +52,10 @@ STEPS = {
 }
 
 MODE_STEPS = {
-    "reconstruct": ["colmap", "openmvs"],
+    "depth": ["colmap", "gaus_mvsnet"],
+    "reconstruct": ["colmap", "gaus_mvsnet", "openmvs"],
     "segment": ["qs_sam3d_convert", "qs_sam3d_segment"],
-    "all": ["colmap", "openmvs", "qs_sam3d_convert", "qs_sam3d_segment"],
+    "all": ["colmap", "gaus_mvsnet", "openmvs", "qs_sam3d_convert", "qs_sam3d_segment"],
 }
 
 

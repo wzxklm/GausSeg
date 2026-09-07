@@ -2,6 +2,11 @@
 
 Pipeline: InterfaceCOLMAP -> DensifyPointCloud -> ReconstructMesh ->
 per-vertex mesh colorization (KNN from dense cloud) -> voxel downsample.
+
+Under `mesh_only` the PatchMatch estimation is skipped and DensifyPointCloud
+only fuses the depth maps Gaus-MVSNet already wrote, which is what the paper's
+pipeline does: depth comes from the network, and OpenMVS contributes nothing
+but the surface the labels are later drawn on.
 """
 
 from __future__ import annotations
@@ -19,6 +24,7 @@ from scipy.spatial import KDTree
 from tqdm.auto import tqdm
 
 from config import OpenMVSConfig
+from utils.depth import read_dmap
 from utils.pointcloud import voxel_downsample
 
 logger = logging.getLogger(__name__)
@@ -51,7 +57,11 @@ class OpenMVSDense:
         self.config.openmvs_dir.mkdir(parents=True)
 
         self._interface_colmap()
-        self._densify()
+        if self.config.mesh_only:
+            self._link_dmaps()
+            self._fuse_dmaps()
+        else:
+            self._densify()
         self._reconstruct_mesh()
         self._colorize_mesh()
         self._downsample()
@@ -84,6 +94,62 @@ class OpenMVSDense:
         ])
         if not self.config.openmvs_dense_ply.is_file():
             raise RuntimeError(f"DensifyPointCloud produced no {self.config.openmvs_dense_ply}")
+
+    def _link_dmaps(self) -> None:
+        """Expose Gaus-MVSNet's depth maps in the OpenMVS working folder.
+
+        Symlinked rather than copied: at source resolution these run to
+        hundreds of MB per scene, and OpenMVS only ever reads them.
+        """
+        dmaps = sorted(self.config.dmap_dir.glob("depth*.dmap"))
+        if not dmaps:
+            raise FileNotFoundError(
+                f"No .dmap files in {self.config.dmap_dir}. "
+                "Run the gaus_mvsnet stage before openmvs in mesh_only mode."
+            )
+        for dmap in dmaps:
+            (self.config.openmvs_dir / dmap.name).symlink_to(dmap.resolve())
+        logger.info("Linked %d depth maps from %s", len(dmaps), self.config.dmap_dir)
+
+    def _fuse_dmaps(self) -> None:
+        """scene.mvs + linked .dmap -> scene_dense.mvs + scene_dense.ply
+
+        OpenMVS indexes a depth map by pixel into the image it loaded itself
+        and segfaults when the two disagree, so its resolution is pinned to the
+        one the maps were written at instead of being left to the
+        resolution-level and min/max clamps.
+        """
+        resolution = self._dmap_resolution()
+        self._run("DensifyPointCloud", [
+            "-w", str(self.config.openmvs_dir),
+            "-i", self.config.openmvs_scene.name,
+            "-o", self.config.openmvs_dense_mvs.name,
+            "--resolution-level", "0",
+            "--min-resolution", str(resolution),
+            "--max-resolution", str(resolution),
+            "--number-views", str(self.config.number_views),
+            "--number-views-fuse", str(self.config.number_views_fuse),
+            "--estimate-colors", str(self.config.estimate_colors),
+            "--estimate-normals", str(self.config.estimate_normals),
+            # Refining the maps against their neighbours would overwrite the
+            # network's depth with PatchMatch's.
+            "--geometric-iters", "0",
+        ])
+        if not self.config.openmvs_dense_ply.is_file():
+            raise RuntimeError(f"DensifyPointCloud produced no {self.config.openmvs_dense_ply}")
+
+    def _dmap_resolution(self) -> int:
+        sizes = {
+            (d["image_width"], d["image_height"])
+            for d in (read_dmap(p) for p in sorted(self.config.dmap_dir.glob("depth*.dmap")))
+        }
+        if len(sizes) > 1:
+            raise RuntimeError(
+                f"Depth maps disagree on resolution ({sorted(sizes)}); OpenMVS "
+                "fuses a single pinned resolution per scene"
+            )
+        width, height = sizes.pop()
+        return max(width, height)
 
     def _reconstruct_mesh(self) -> None:
         """scene_dense.mvs -> scene_mesh.mvs + scene_mesh.ply"""

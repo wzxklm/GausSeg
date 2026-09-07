@@ -10,12 +10,14 @@ TESTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(TESTS_DIR))
 
 from test_colmap import test_colmap  # noqa: E402
+from test_gaus_mvsnet import test_gaus_mvsnet  # noqa: E402
 from test_openmvs import test_openmvs  # noqa: E402
 from test_qs_sam3d import test_qs_sam3d  # noqa: E402
 
 
 def test_all() -> None:
     test_colmap()
+    test_gaus_mvsnet()
     test_openmvs()
     test_qs_sam3d()
 

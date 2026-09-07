@@ -23,8 +23,35 @@ colmap:
   camera_mode: single # auto | single | per_folder | per_image; single forces shared intrinsics for one camera at a fixed focal length, per_folder when the data is split into one directory per camera
   camera_model: simple_radial # pycolmap CameraModelId. Pinhole family (simple_pinhole/pinhole/simple_radial/radial/opencv/...) suits already-undistorted images; use the fisheye family (opencv_fisheye/radial_fisheye/...) for native fisheye
 
+# --- Gaus-MVSNet Depth Inference ---
+gaus_mvsnet:
+  checkpoint: gaus_mvsnet/checkpoint/gaus_mvsnet_dtu.ckpt # DTU-trained backbone weights; see README for the download
+  num_view: 5 # reference + source views per inference sample (paper: N = 5)
+  num_depth: 192 # depth hypotheses spanning the COLMAP-derived range at stage 1
+  max_h: 1200 # inference height cap; the actual size is floored to a multiple of 32 per image
+  max_w: 1600 # inference width cap; larger costs VRAM quadratically in the cost volume
+  interval_scale: 1.06 # widens the hypothesis interval so the range survives COLMAP depth-range noise
+  ndepths: "48,32,8" # depth hypotheses per cascade stage, coarse to fine
+  depth_inter_r: "4,2,1" # hypothesis interval ratio per stage
+  cr_base_chs: "8,8,8" # 3D CNN base channels per stage (paper: 8)
+  # View selection for pair.txt (Yao et al. scoring; only affects which source views each reference gets)
+  view_selection_theta0: 5.0 # peak of the triangulation-angle score, degrees
+  view_selection_sigma1: 1.0 # score falloff below theta0
+  view_selection_sigma2: 10.0 # score falloff above theta0
+  # Depth fusion filter
+  prob_threshold: 0.8 # minimum photometric confidence
+  num_consistent: 3 # minimum source views a pixel must satisfy jointly
+  reproj_threshold: 0.25 # forward-backward reprojection error, px
+  depth_threshold: 0.01 # relative depth deviation
+  # Downsample (voxel-grid binary search on GPU; same knobs as openmvs)
+  downsample_target: 10000000 # target point count
+  downsample_max_iter: 30 # binary-search iterations for voxel size
+  downsample_tolerance: 0.01 # accept voxel size when |count-target|/target < tol
+  downsample_batch_size: 20000000 # GPU batch (in points) for hash + aggregate
+
 # --- OpenMVS Dense Reconstruction ---
 openmvs:
+  mesh_only: true # fuse Gaus-MVSNet's .dmap files instead of running PatchMatch; see README
   bin_dir: "" # directory containing InterfaceCOLMAP/DensifyPointCloud/ReconstructMesh; empty -> look up on PATH
   resolution_level: 1 # 0=original, 1=1/2, 2=1/4
   min_resolution: 640 # min image processing resolution

@@ -191,11 +191,120 @@ class ColmapConfig:
         )
 
 
+
+@dataclass
+class GausMvsNetConfig:
+    """Gaus-MVSNet depth inference configuration."""
+
+    project_dir: Path
+    checkpoint: str
+    num_view: int
+    num_depth: int
+    max_h: int
+    max_w: int
+    interval_scale: float
+    ndepths: str
+    depth_inter_r: str
+    cr_base_chs: str
+    view_selection_theta0: float
+    view_selection_sigma1: float
+    view_selection_sigma2: float
+    prob_threshold: float
+    num_consistent: int
+    reproj_threshold: float
+    depth_threshold: float
+    downsample_target: int
+    downsample_max_iter: int
+    downsample_tolerance: float
+    downsample_batch_size: int
+
+    # Derived paths
+    output_dir: Path = field(init=False)
+    colmap_dense: Path = field(init=False)
+    colmap_images: Path = field(init=False)
+    colmap_sparse: Path = field(init=False)
+    mvs_dir: Path = field(init=False)
+    mvs_cams_dir: Path = field(init=False)
+    mvs_pair_file: Path = field(init=False)
+    depth_dir: Path = field(init=False)
+    confidence_dir: Path = field(init=False)
+    filtered_depth_dir: Path = field(init=False)
+    dmap_dir: Path = field(init=False)
+    final_pointcloud: Path = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.project_dir = Path(self.project_dir)
+        self.output_dir = self.project_dir / "output"
+        self.colmap_dense = self.output_dir / "colmap" / "dense"
+        self.colmap_images = self.colmap_dense / "images"
+        self.colmap_sparse = self.colmap_dense / "sparse"
+        self.mvs_dir = self.output_dir / "gaus_mvsnet"
+        self.mvs_cams_dir = self.mvs_dir / "cams"
+        self.mvs_pair_file = self.mvs_dir / "pair.txt"
+        self.depth_dir = self.mvs_dir / "depth_est"
+        self.confidence_dir = self.mvs_dir / "confidence"
+        self.filtered_depth_dir = self.mvs_dir / "filtered_depth"
+        self.dmap_dir = self.mvs_dir / "dmaps"
+        self.final_pointcloud = self.mvs_dir / "final_pointcloud.ply"
+
+        stages = (len(self.ndepths_list), len(self.depth_inter_r_list), len(self.cr_base_chs_list))
+        if len(set(stages)) != 1:
+            raise ValueError(
+                f"Cascade stage counts disagree: ndepths={stages[0]}, "
+                f"depth_inter_r={stages[1]}, cr_base_chs={stages[2]}"
+            )
+        if self.num_view < 2:
+            raise ValueError(f"num_view must be >= 2, got {self.num_view}")
+        if self.num_consistent < 1:
+            raise ValueError(f"num_consistent must be >= 1, got {self.num_consistent}")
+        if not 0.0 <= self.prob_threshold <= 1.0:
+            raise ValueError(f"prob_threshold must be in [0, 1], got {self.prob_threshold}")
+        # No 32-grid requirement here: the inference size is floored onto that
+        # grid per image, so these are a cap rather than the size itself.
+        for name, value in (("max_h", self.max_h), ("max_w", self.max_w)):
+            if value < 32:
+                raise ValueError(f"{name} must be at least 32, got {value}")
+
+    @property
+    def ndepths_list(self) -> list[int]:
+        return [int(x) for x in self.ndepths.split(",") if x]
+
+    @property
+    def depth_inter_r_list(self) -> list[float]:
+        return [float(x) for x in self.depth_inter_r.split(",") if x]
+
+    @property
+    def cr_base_chs_list(self) -> list[int]:
+        return [int(x) for x in self.cr_base_chs.split(",") if x]
+
+    @property
+    def num_stage(self) -> int:
+        return len(self.ndepths_list)
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> GausMvsNetConfig:
+        raw = _load_yaml(path)
+        g = raw["gaus_mvsnet"]
+        return cls(project_dir=raw["project_dir"], **{k: g[k] for k in _GAUS_MVSNET_KEYS})
+
+
+_GAUS_MVSNET_KEYS = (
+    "checkpoint",
+    "num_view", "num_depth", "max_h", "max_w", "interval_scale",
+    "ndepths", "depth_inter_r", "cr_base_chs",
+    "view_selection_theta0", "view_selection_sigma1", "view_selection_sigma2",
+    "prob_threshold", "num_consistent", "reproj_threshold", "depth_threshold",
+    "downsample_target", "downsample_max_iter",
+    "downsample_tolerance", "downsample_batch_size",
+)
+
+
 @dataclass
 class OpenMVSConfig:
     """OpenMVS dense reconstruction configuration."""
 
     project_dir: Path
+    mesh_only: bool
     bin_dir: str
     resolution_level: int
     min_resolution: int
@@ -225,11 +334,13 @@ class OpenMVSConfig:
     openmvs_mesh_mvs: Path = field(init=False)
     openmvs_mesh_ply: Path = field(init=False)
     final_pointcloud: Path = field(init=False)
+    dmap_dir: Path = field(init=False)
 
     def __post_init__(self) -> None:
         self.project_dir = Path(self.project_dir)
         self.output_dir = self.project_dir / "output"
         self.colmap_dense = self.output_dir / "colmap" / "dense"
+        self.dmap_dir = self.output_dir / "gaus_mvsnet" / "dmaps"
         self.openmvs_dir = self.output_dir / "openmvs"
         self.openmvs_logs_dir = self.openmvs_dir / "logs"
         self.openmvs_scene = self.openmvs_dir / "scene.mvs"
@@ -245,6 +356,7 @@ class OpenMVSConfig:
         o = raw["openmvs"]
         return cls(
             project_dir=raw["project_dir"],
+            mesh_only=o["mesh_only"],
             bin_dir=o["bin_dir"],
             resolution_level=o["resolution_level"],
             min_resolution=o["min_resolution"],
@@ -330,7 +442,7 @@ class QsSam3dConfig:
         self.colmap_images = self.colmap_dense / "images"
         self.openmvs_dir = self.output_dir / "openmvs"
         self.openmvs_mesh_ply = self.openmvs_dir / "scene_mesh.ply"
-        self.final_pointcloud = self.openmvs_dir / "final_pointcloud.ply"
+        self.final_pointcloud = self.output_dir / "gaus_mvsnet" / "final_pointcloud.ply"
         self.sam3d_dir = self.output_dir / "qs_sam3d"
         self.sam3d_color_dir = self.sam3d_dir / "color"
         self.sam3d_depth_dir = self.sam3d_dir / "depth"
@@ -386,6 +498,7 @@ class PipelineConfig:
 
     project_dir: Path
     colmap: ColmapConfig
+    gaus_mvsnet: GausMvsNetConfig
     openmvs: OpenMVSConfig
     qs_sam3d: QsSam3dConfig
 
@@ -416,10 +529,14 @@ class PipelineConfig:
                 camera_mode=raw["colmap"]["camera_mode"],
                 camera_model=raw["colmap"]["camera_model"],
             ),
+            gaus_mvsnet=GausMvsNetConfig(
+                project_dir=project_dir,
+                **{k: raw["gaus_mvsnet"][k] for k in _GAUS_MVSNET_KEYS},
+            ),
             openmvs=OpenMVSConfig(
                 project_dir=project_dir,
                 **{k: raw["openmvs"][k] for k in (
-                    "bin_dir",
+                    "mesh_only", "bin_dir",
                     "resolution_level", "min_resolution", "max_resolution",
                     "number_views", "number_views_fuse",
                     "estimate_colors", "estimate_normals",
@@ -478,6 +595,10 @@ def _load_yaml(path: str | Path) -> dict:
     sam_path = raw.get("qs_sam3d", {}).get("sam_model_path")
     if sam_path is not None and not Path(sam_path).is_absolute():
         raw["qs_sam3d"]["sam_model_path"] = str((path.parent / sam_path).resolve())
+
+    ckpt = raw.get("gaus_mvsnet", {}).get("checkpoint")
+    if ckpt and not Path(ckpt).is_absolute():
+        raw["gaus_mvsnet"]["checkpoint"] = str((path.parent / ckpt).resolve())
 
     bin_dir = raw.get("openmvs", {}).get("bin_dir")
     if bin_dir and not Path(bin_dir).is_absolute():

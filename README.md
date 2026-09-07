@@ -1,20 +1,42 @@
-# GausSeg
+# GausSeg — `gaus-mvsnet` branch
 
 Class-agnostic 3D instance segmentation from a folder of RGB images. The
-pipeline runs Structure-from-Motion, dense reconstruction, and SAM-based mask
-lifting, and writes a labelled point cloud and mesh.
+pipeline runs Structure-from-Motion, learned multi-view stereo, and SAM-based
+mask lifting, and writes a labelled point cloud and mesh.
+
+> **This branch replaces the depth source.** On `main`, depth comes from
+> OpenMVS PatchMatch. Here it comes from Gaus-MVSNet, the unsupervised MVS
+> network of the paper, and OpenMVS is reduced to building the surface the
+> labels are drawn on. The two branches are kept separate rather than merged.
+>
+> **Inference only.** The 3D Gaussian Splatting auxiliary branch exists to
+> supervise training and plays no part in inference, so it is not in this
+> release; the training code will be added to this branch after publication.
 
 ## Pipeline
 
 | # | Stage | Module | Writes |
 | --- | --- | --- | --- |
 | 1 | COLMAP SfM | `colmap/sfm.py` | Camera poses, sparse cloud |
-| 2 | OpenMVS Dense | `openmvs/dense.py` | Dense cloud, mesh, downsampled cloud |
-| 3 | QS-SAM3D Convert | `qs_sam3d/converter.py` | Per-view RGB-D + intrinsics for SAM |
-| 4 | QS-SAM3D Segment | `qs_sam3d/segmentation.py` | Labelled point cloud, labelled mesh |
+| 2 | Gaus-MVSNet Depth | `gaus_mvsnet/depth.py` | Per-view depth (`.dmap`), fused point cloud |
+| 3 | OpenMVS Mesh | `openmvs/dense.py` | Surface mesh, fused dense cloud |
+| 4 | QS-SAM3D Convert | `qs_sam3d/converter.py` | Per-view RGB-D + intrinsics for SAM |
+| 5 | QS-SAM3D Segment | `qs_sam3d/segmentation.py` | Labelled point cloud, labelled mesh |
 
-Stage 4 reads stage 2's `scene_mesh.ply`, so `--mode segment` cannot be run
-against a scene that has not been through stage 2.
+Stage 2 predicts one depth map per view, filters them against each other, and
+fuses the survivors into `final_pointcloud.ply` — the geometry stage 5
+segments. It also writes each depth map in OpenMVS's `.dmap` format, which is
+what stages 3 and 4 read.
+
+Stage 3 does not run PatchMatch. With `openmvs.mesh_only` set (the default on
+this branch) `DensifyPointCloud` only *fuses* the depth maps stage 2 wrote,
+which takes seconds, and `ReconstructMesh` turns the result into the surface
+stage 5 draws labels on. The labels themselves are computed on stage 2's point
+cloud and transferred to mesh vertices by nearest neighbour, so the mesh
+changes how the result looks, never what it says.
+
+Stage 5 reads stage 3's `scene_mesh.ply`, so `--mode segment` cannot be run
+against a scene that has not been through stages 2 and 3.
 
 ---
 
@@ -90,6 +112,21 @@ data/<scene>/
     └── qs_sam3d/        # stages 3-4
 ```
 
+**Gaus-MVSNet weights.** The DTU-trained checkpoint (`gaus_mvsnet.checkpoint`,
+14.1 MiB) ships as a release asset rather than in the tree, so cloning the
+repository stays cheap:
+
+```bash
+mkdir -p gaus_mvsnet/checkpoint
+wget -O gaus_mvsnet/checkpoint/gaus_mvsnet_dtu.ckpt \
+  https://github.com/wzxklm/GausSeg/releases/download/gaus-mvsnet-v1/gaus_mvsnet_dtu.ckpt
+echo "e97f84b84ac107e3f907427ccaf854c70b4286cbd407f9a16d96b64c32c2f787  gaus_mvsnet/checkpoint/gaus_mvsnet_dtu.ckpt" | sha256sum -c -
+```
+
+It is loaded with `strict=True`, so a checkpoint whose parameter names or
+shapes differ from `gaus_mvsnet/model/casmvsnet.py` fails loudly at startup
+rather than silently predicting from partly random weights.
+
 **SAM weights.** Not redistributed here. Fetch ViT-H (~2.4 GB) to wherever
 `qs_sam3d.sam_model_path` points:
 
@@ -108,9 +145,10 @@ python pipeline.py --config config.yaml --mode all
 
 | `--mode` | Stages |
 | --- | --- |
-| `reconstruct` | 1 → 2 |
-| `segment` | 3 → 4 |
-| `all` *(default)* | 1 → 2 → 3 → 4 |
+| `depth` | 1 → 2 |
+| `reconstruct` | 1 → 2 → 3 |
+| `segment` | 4 → 5 |
+| `all` *(default)* | 1 → 2 → 3 → 4 → 5 |
 
 CUDA memory is released between stages, so a full run does not accumulate.
 
@@ -119,6 +157,7 @@ unless given `--config`:
 
 ```bash
 python -m colmap.sfm
+python -m gaus_mvsnet.depth
 python -m openmvs.dense
 python -m qs_sam3d.converter
 python -m qs_sam3d.segmentation
@@ -156,7 +195,24 @@ that need changing per scene:
 | `colmap.mapper` | `incremental` by default; `global` (GLOMAP) from a few thousand images up |
 | `colmap.max_num_features` | LightGlue attention is O(N²) — lower this first when VRAM-bound |
 
-**Stage 2 — cost vs. quality**
+**Stage 2 — depth inference**
+
+| Setting | Guidance |
+| --- | --- |
+| `gaus_mvsnet.checkpoint` | DTU-trained weights; see *Input* above |
+| `gaus_mvsnet.max_h`, `max_w` | Inference resolution, both multiples of 32. The cost volume dominates VRAM — halve these first when it does not fit |
+| `gaus_mvsnet.num_view` | Reference + source views per sample (paper: 5) |
+| `gaus_mvsnet.num_depth` | Depth hypotheses at the coarsest stage |
+| `gaus_mvsnet.prob_threshold`, `num_consistent`, `reproj_threshold`, `depth_threshold` | Fusion filter; the defaults are the settings the released checkpoint was evaluated with. Tighten them for a sparser, cleaner cloud |
+
+**Stage 3 — mesh**
+
+| Setting | Guidance |
+| --- | --- |
+| `openmvs.mesh_only` | `true` fuses stage 2's depth maps (seconds); `false` runs full PatchMatch densification and ignores them |
+| `openmvs.resolution_level` | Only read when `mesh_only` is `false` — the fusion path is pinned to the resolution the depth maps were written at |
+
+**Stage 3 — PatchMatch densification (only when `mesh_only: false`)**
 
 | Setting | Guidance |
 | --- | --- |
@@ -164,7 +220,7 @@ that need changing per scene:
 | `openmvs.number_views` | Source views per pixel |
 | `openmvs.omp_num_threads` | Keep at `1` on 16 GB cards — the 16-way default has been observed to OOM on a 49-image scene |
 
-**Stage 4**
+**Stage 5**
 
 | Setting | Guidance |
 | --- | --- |
@@ -195,6 +251,16 @@ python tests/test_all.py 2>&1 | tee tests/test_all.log
 
 ## Third-party code
 
+[`gaus_mvsnet/model/`](gaus_mvsnet/model/) holds the cascade MVS backbone,
+vendored from [CasMVSNet](https://github.com/alibaba/cascade-stereo) (MIT,
+© 2019 Alibaba) in the form used by
+[RC-MVSNet](https://github.com/Boese0601/RC-MVSNet) (MIT, © 2022 Di Chang),
+and kept close to that form so the released checkpoint loads by parameter
+name. It is covered by [`gaus_mvsnet/model/LICENSE`](gaus_mvsnet/model/LICENSE)
+rather than this repository's; see
+[`gaus_mvsnet/model/README.md`](gaus_mvsnet/model/README.md) for what was
+changed. The rest of `gaus_mvsnet/` is this repository's own code.
+
 [`pointops/`](pointops/) is a vendored copy of `libs/pointops` from
 [Pointcept](https://github.com/Pointcept/Pointcept) (MIT, © 2023 Pointcept),
 originally from Point Transformer V2. It is **not** covered by this
@@ -212,4 +278,4 @@ under its own license.
 
 ## License
 
-[MIT](LICENSE), except `pointops/` as noted above.
+[MIT](LICENSE), except `pointops/` and `gaus_mvsnet/model/` as noted above.

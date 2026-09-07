@@ -78,3 +78,45 @@ def pose_camera_to_world(R: np.ndarray, C: np.ndarray) -> np.ndarray:
     T[:3, :3] = R.T
     T[:3, 3] = C
     return T
+
+
+def write_dmap(
+    path: Path | str,
+    depth: np.ndarray,
+    image_name: str,
+    image_id: int,
+    neighbor_ids: list[int],
+    K: np.ndarray,
+    R: np.ndarray,
+    C: np.ndarray,
+    image_size: tuple[int, int],
+    d_min: float,
+    d_max: float,
+) -> None:
+    """Write an OpenMVS .dmap file, inverse of `read_dmap`.
+
+    `image_size` is (width, height) of the image the depth was estimated on,
+    and `K` must be the intrinsic at that resolution. Only HAS_DEPTH is set:
+    OpenMVS fuses depth-only maps, and the normal/confidence planes it would
+    otherwise read are not produced by an external estimator.
+    """
+    depth = np.ascontiguousarray(depth, dtype=np.float32)
+    dh, dw = depth.shape
+    iw, ih = image_size
+    encoded = image_name.encode("utf-8")
+    ids = np.asarray([image_id, *neighbor_ids], dtype=np.uint32)
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as f:
+        f.write(struct.pack(
+            _HEADER_FMT, _DMAP_MAGIC, 0x1, 0, iw, ih, dw, dh, d_min, d_max
+        ))
+        f.write(struct.pack("<H", len(encoded)))
+        f.write(encoded)
+        f.write(struct.pack("<I", len(ids)))
+        f.write(ids.tobytes())
+        f.write(np.ascontiguousarray(K, dtype=np.float64).tobytes())
+        f.write(np.ascontiguousarray(R, dtype=np.float64).tobytes())
+        f.write(np.ascontiguousarray(C, dtype=np.float64).tobytes())
+        f.write(depth.tobytes())

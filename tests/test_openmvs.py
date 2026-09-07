@@ -2,7 +2,8 @@
 
 Runs OpenMVS on the COLMAP output for the scene `config.yaml` points at and
 verifies the expected .mvs / .ply files exist. Requires `test_colmap` to have
-run first (or the COLMAP dense/ outputs already present).
+run first (or the COLMAP dense/ outputs already present), and under
+`mesh_only` also `test_gaus_mvsnet`, whose depth maps it fuses.
 """
 
 from __future__ import annotations

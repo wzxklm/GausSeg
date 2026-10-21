@@ -1,7 +1,7 @@
 The cascade MVS backbone in this directory (`casmvsnet.py`, `modules.py`) is
-vendored from two upstream projects, both MIT-licensed. Their notices are
-reproduced below as that licence requires. This directory is covered by them
-rather than by the repository's own LICENSE.
+vendored from two upstream projects, and `warping.py` from the second of them,
+all MIT-licensed. Their notices are reproduced below as that licence requires.
+This directory is covered by them rather than by the repository's own LICENSE.
 
 --------------------------------------------------------------------------
 CasMVSNet — https://github.com/alibaba/cascade-stereo

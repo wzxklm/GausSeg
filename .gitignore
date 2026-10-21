@@ -41,21 +41,9 @@ config.local.yaml
 
 # Project data & artifacts
 data/
-outputs/
-output/
 runs/
 logs/
 *.log
-
-# SfM / MVS intermediate & result files
-*.db
-*.db-journal
-*.bin
-*.ply
-*.obj
-*.mvs
-*.dmap
-*.mvi
 
 # Model weights
 *.pt
@@ -64,7 +52,7 @@ logs/
 *.onnx
 *.safetensors
 
-# Images / videos (usually large datasets)
+# Array dumps
 *.npy
 *.npz
 

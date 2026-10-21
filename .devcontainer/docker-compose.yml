@@ -12,9 +12,6 @@ services:
         GIT_DELTA_VERSION: 0.18.2
     volumes:
       - ..:/workspace:delegated
-      # Named volume, so the retrieval-model download survives rebuilds without
-      # the compose file assuming anything about the host filesystem.
-      - gausseg_hf_cache:/home/sandboxuser/.cache/huggingface
     extra_hosts:
       - "host.docker.internal:host-gateway"
     command: sleep infinity
@@ -25,6 +22,3 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-
-volumes:
-  gausseg_hf_cache:

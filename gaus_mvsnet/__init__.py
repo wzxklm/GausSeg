@@ -1,5 +1,1 @@
-"""Gaus-MVSNet depth inference."""
-
-from gaus_mvsnet.depth import GausMvsNetDepth
-
-__all__ = ["GausMvsNetDepth"]
+"""Gaus-MVSNet unsupervised training."""

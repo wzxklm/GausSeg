@@ -10,8 +10,9 @@ mask lifting, and writes a labelled point cloud and mesh.
 > labels are drawn on. The two branches are kept separate rather than merged.
 >
 > **Inference only.** The 3D Gaussian Splatting auxiliary branch exists to
-> supervise training and plays no part in inference, so it is not in this
-> release; the training code will be added to this branch after publication.
+> supervise training and plays no part in inference, so it is not on this
+> branch. The training code is on the `gaus-mvsnet-train` branch, and the
+> checkpoints it writes load here unchanged.
 
 ## Pipeline
 
@@ -112,15 +113,13 @@ data/<scene>/
     └── qs_sam3d/        # stages 3-4
 ```
 
-**Gaus-MVSNet weights.** The DTU-trained checkpoint (`gaus_mvsnet.checkpoint`,
-14.1 MiB) ships as a release asset rather than in the tree, so cloning the
-repository stays cheap:
+**Gaus-MVSNet weights.** No pretrained checkpoint is distributed. Train one on
+DTU with the `gaus-mvsnet-train` branch (see its README), then point
+`gaus_mvsnet.checkpoint` at one of the `model_XXXXXX.ckpt` files it writes:
 
 ```bash
 mkdir -p gaus_mvsnet/checkpoint
-wget -O gaus_mvsnet/checkpoint/gaus_mvsnet_dtu.ckpt \
-  https://github.com/wzxklm/GausSeg/releases/download/gaus-mvsnet-v1/gaus_mvsnet_dtu.ckpt
-echo "e97f84b84ac107e3f907427ccaf854c70b4286cbd407f9a16d96b64c32c2f787  gaus_mvsnet/checkpoint/gaus_mvsnet_dtu.ckpt" | sha256sum -c -
+cp <log_dir>/model_000014.ckpt gaus_mvsnet/checkpoint/gaus_mvsnet_dtu.ckpt
 ```
 
 It is loaded with `strict=True`, so a checkpoint whose parameter names or
@@ -221,11 +220,11 @@ The settings that need changing per scene:
 
 | Setting | Guidance |
 | --- | --- |
-| `gaus_mvsnet.checkpoint` | DTU-trained weights; see *Input* above |
+| `gaus_mvsnet.checkpoint` | Weights trained on the `gaus-mvsnet-train` branch; see *Input* above |
 | `gaus_mvsnet.max_h`, `max_w` | Inference resolution, both multiples of 32. The cost volume dominates VRAM — halve these first when it does not fit |
 | `gaus_mvsnet.num_view` | Reference + source views per sample (paper: 5) |
 | `gaus_mvsnet.num_depth` | Depth hypotheses at the coarsest stage |
-| `gaus_mvsnet.prob_threshold`, `num_consistent`, `reproj_threshold`, `depth_threshold` | Fusion filter; the defaults are the settings the released checkpoint was evaluated with. Tighten them for a sparser, cleaner cloud |
+| `gaus_mvsnet.prob_threshold`, `num_consistent`, `reproj_threshold`, `depth_threshold` | Fusion filter. Tighten them for a sparser, cleaner cloud |
 
 **Stage 3 — mesh**
 
@@ -277,8 +276,8 @@ python tests/test_all.py 2>&1 | tee tests/test_all.log
 vendored from [CasMVSNet](https://github.com/alibaba/cascade-stereo) (MIT,
 © 2019 Alibaba) in the form used by
 [RC-MVSNet](https://github.com/Boese0601/RC-MVSNet) (MIT, © 2022 Di Chang),
-and kept close to that form so the released checkpoint loads by parameter
-name. It is covered by [`gaus_mvsnet/model/LICENSE`](gaus_mvsnet/model/LICENSE)
+and kept close to that form so checkpoints from the training branch load by
+parameter name. It is covered by [`gaus_mvsnet/model/LICENSE`](gaus_mvsnet/model/LICENSE)
 rather than this repository's; see
 [`gaus_mvsnet/model/README.md`](gaus_mvsnet/model/README.md) for what was
 changed. The rest of `gaus_mvsnet/` is this repository's own code.

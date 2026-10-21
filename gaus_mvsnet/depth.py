@@ -44,7 +44,7 @@ class GausMvsNetDepth:
         if not checkpoint.is_file():
             raise FileNotFoundError(
                 f"Gaus-MVSNet checkpoint not found: {checkpoint}. "
-                "See the README for where to download it."
+                "Train one on the gaus-mvsnet-train branch; see the README."
             )
         if not cfg.colmap_images.is_dir():
             raise FileNotFoundError(f"COLMAP images not found: {cfg.colmap_images}")

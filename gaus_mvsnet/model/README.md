@@ -12,8 +12,8 @@ Both are MIT-licensed, as is this repository, but their notices travel with
 the code: see [`LICENSE`](LICENSE) in this directory, which covers these two
 files instead of the repository's own.
 
-They are kept close to that upstream so the released checkpoint loads with
-`strict=True` — parameter names are part of the interface here. Only three
+They are kept close to that upstream so checkpoints from the training branch
+load with `strict=True` — parameter names are part of the interface here. Only three
 edits were made, none of which touch module structure or parameter names:
 
 - the two constructor `print()` calls and one in `FeatureNet` were removed
@@ -25,4 +25,4 @@ fusion, and the stage itself — is this repository's own code and follows its
 conventions rather than upstream's.
 
 Inference runs the backbone alone. The 3D Gaussian Splatting auxiliary branch
-that supervises training is not part of this release.
+that supervises training is on the `gaus-mvsnet-train` branch.

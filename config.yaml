@@ -25,7 +25,7 @@ colmap:
 
 # --- Gaus-MVSNet Depth Inference ---
 gaus_mvsnet:
-  checkpoint: gaus_mvsnet/checkpoint/gaus_mvsnet_dtu.ckpt # DTU-trained backbone weights; see README for the download
+  checkpoint: gaus_mvsnet/checkpoint/gaus_mvsnet_dtu.ckpt # backbone weights trained on the gaus-mvsnet-train branch; see README
   num_view: 5 # reference + source views per inference sample (paper: N = 5)
   num_depth: 192 # depth hypotheses spanning the COLMAP-derived range at stage 1
   max_h: 1200 # inference height cap; the actual size is floored to a multiple of 32 per image
